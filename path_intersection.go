@@ -1270,9 +1270,6 @@ func splitAtIntersections(zs []Point, queue *SweepEvents, s *SweepPoint, isA boo
 			right.vertical, right.other.vertical = true, true
 			if right.Y < right.other.Y {
 				// reverse first segment
-				if isA {
-					fmt.Println("WARNING: reversing first segment of A")
-				}
 				if right.other.node != nil {
 					panic("impossible: first segment became vertical and needs reversal, but was already in the sweep status")
 				}
