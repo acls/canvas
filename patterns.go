@@ -119,10 +119,12 @@ func (p *HatchPattern) Tile(clip *Path) *Path {
 
 	hatch := p.hatch(x0, y0, x1, y1)
 	hatch = hatch.Transform(p.cell)
-	hatch = hatch.And(clip)
 	if p.Thickness != 0.0 {
+		// stroke before clipping to avoid degenerate near-zero-length
+		// segments from And that can trigger Bentley-Ottmann edge cases
 		hatch = hatch.Stroke(p.Thickness, ButtCap, MiterJoin, 0.01)
 	}
+	hatch = hatch.And(clip)
 	return hatch
 }
 
