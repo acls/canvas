@@ -1,4 +1,4 @@
-package tests
+package rasterizer
 
 import (
 	"image"
@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/tdewolff/canvas"
-	"github.com/tdewolff/canvas/renderers/rasterizer"
 )
 
 // Test polygons of varying complexity.
@@ -38,7 +37,7 @@ var (
 
 func makeCtx(w, h int) (*canvas.Context, *image.RGBA) {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	rast := rasterizer.FromImage(img, canvas.DPMM(1.0), canvas.DefaultColorSpace)
+	rast := FromImage(img, canvas.DPMM(1.0), canvas.DefaultColorSpace)
 	ctx := canvas.NewContext(rast)
 	ctx.SetCoordSystem(canvas.CartesianIV)
 	return ctx, img
