@@ -3,6 +3,7 @@ package canvas
 import (
 	"image/color"
 	"math"
+	"sort"
 )
 
 type Pattern interface {
@@ -119,13 +120,115 @@ func (p *HatchPattern) Tile(clip *Path) *Path {
 
 	hatch := p.hatch(x0, y0, x1, y1)
 	hatch = hatch.Transform(p.cell)
+
+	// clip hatch lines directly against the polygon and stroke without
+	// settling; this avoids the expensive Bentley-Ottmann boolean operations
+	hatch = clipHatchLines(hatch, clip)
 	if p.Thickness != 0.0 {
-		// stroke before clipping to avoid degenerate near-zero-length
-		// segments from And that can trigger Bentley-Ottmann edge cases
+		origFastStroke := FastStroke
+		FastStroke = true
 		hatch = hatch.Stroke(p.Thickness, ButtCap, MiterJoin, 0.01)
+		FastStroke = origFastStroke
 	}
-	hatch = hatch.And(clip)
 	return hatch
+}
+
+// clipHatchLines clips straight line segments in hatch against the filled
+// region of clip using simple line-edge intersection. This is O(lines*edges)
+// and much faster than the general-purpose And boolean operation for the
+// typical case of many short lines against a modest polygon.
+func clipHatchLines(hatch, clip *Path) *Path {
+	// flatten clip path to line segments and extract edges
+	flatClip := clip.Flatten(Tolerance)
+	type edge struct {
+		x0, y0, x1, y1 float64
+	}
+	var edges []edge
+	var sx, sy, cx, cy float64
+	scanner := flatClip.Scanner()
+	for scanner.Scan() {
+		end := scanner.End()
+		switch scanner.Cmd() {
+		case MoveToCmd:
+			sx, sy = end.X, end.Y
+			cx, cy = end.X, end.Y
+		case LineToCmd:
+			edges = append(edges, edge{cx, cy, end.X, end.Y})
+			cx, cy = end.X, end.Y
+		case CloseCmd:
+			if cx != sx || cy != sy {
+				edges = append(edges, edge{cx, cy, sx, sy})
+			}
+			cx, cy = sx, sy
+		}
+	}
+	if len(edges) == 0 {
+		return &Path{}
+	}
+
+	// point-in-polygon test using horizontal ray casting (even-odd rule)
+	inside := func(px, py float64) bool {
+		crossings := 0
+		for _, e := range edges {
+			if (e.y0 <= py && e.y1 > py) || (e.y1 <= py && e.y0 > py) {
+				t := (py - e.y0) / (e.y1 - e.y0)
+				if px < e.x0+t*(e.x1-e.x0) {
+					crossings++
+				}
+			}
+		}
+		return crossings%2 == 1
+	}
+
+	result := &Path{}
+	var ts []float64
+	scanner = hatch.Scanner()
+	var hx0, hy0 float64
+	for scanner.Scan() {
+		end := scanner.End()
+		switch scanner.Cmd() {
+		case MoveToCmd:
+			hx0, hy0 = end.X, end.Y
+		case LineToCmd:
+			hx1, hy1 := end.X, end.Y
+			dx, dy := hx1-hx0, hy1-hy0
+
+			// find intersections with clip polygon edges
+			ts = ts[:0]
+			for _, e := range edges {
+				edx, edy := e.x1-e.x0, e.y1-e.y0
+				denom := dx*edy - dy*edx
+				if math.Abs(denom) < 1e-12 {
+					continue
+				}
+				t := ((e.x0-hx0)*edy - (e.y0-hy0)*edx) / denom
+				u := ((e.x0-hx0)*dy - (e.y0-hy0)*dx) / denom
+				if t > 0 && t < 1 && u >= 0 && u <= 1 {
+					ts = append(ts, t)
+				}
+			}
+			sort.Float64s(ts)
+
+			// walk segments between intersections, keeping those inside
+			prev := 0.0
+			isInside := inside(hx0+1e-6*dx, hy0+1e-6*dy)
+			for _, t := range ts {
+				if isInside {
+					result.MoveTo(hx0+prev*dx, hy0+prev*dy)
+					result.LineTo(hx0+t*dx, hy0+t*dy)
+				}
+				prev = t
+				isInside = !isInside
+			}
+			if isInside {
+				result.MoveTo(hx0+prev*dx, hy0+prev*dy)
+				result.LineTo(hx1, hy1)
+			}
+
+			hx0, hy0 = hx1, hy1
+		}
+	}
+	return result
 }
 
 // RenderTo tiles the hatch pattern to the clipping path and renders it to the renderer.
