@@ -1772,6 +1772,34 @@ func (s *SweepPoint) mergeOverlapping(op pathOp, fillRule FillRule) {
 	s.prev = prev
 }
 
+// translatePathData directly shifts all coordinates in a flattened path by (dx, dy).
+func translatePathData(p *Path, dx, dy float64) {
+	for i := 0; i < len(p.d); {
+		cmd := p.d[i]
+		switch cmd {
+		case MoveToCmd, LineToCmd, CloseCmd:
+			p.d[i+1] += dx
+			p.d[i+2] += dy
+		case QuadToCmd:
+			p.d[i+1] += dx
+			p.d[i+2] += dy
+			p.d[i+3] += dx
+			p.d[i+4] += dy
+		case CubeToCmd:
+			p.d[i+1] += dx
+			p.d[i+2] += dy
+			p.d[i+3] += dx
+			p.d[i+4] += dy
+			p.d[i+5] += dx
+			p.d[i+6] += dy
+		case ArcToCmd:
+			p.d[i+5] += dx
+			p.d[i+6] += dy
+		}
+		i += cmdLen(cmd)
+	}
+}
+
 func bentleyOttmann(ps, qs Paths, op pathOp, fillRule FillRule) Paths {
 	// TODO: add grid spacing argument
 	// TODO: add Intersects/Touches functions (return bool)
@@ -1930,6 +1958,25 @@ func bentleyOttmann(ps, qs Paths, op pathOp, fillRule FillRule) Paths {
 		}
 		for i := range qs {
 			qs[i] = qs[i].Flatten(Tolerance)
+		}
+	}
+
+	// translate paths near the origin to maximize floating-point precision for intersection
+	// calculations when coordinates are large, then translate back after building result polygons
+	var originX, originY float64
+	if len(ps) > 0 && len(ps[0].d) >= 3 {
+		originX = ps[0].d[1]
+		originY = ps[0].d[2]
+	}
+	if math.Abs(originX) < 1e3 && math.Abs(originY) < 1e3 {
+		originX, originY = 0.0, 0.0
+	}
+	if originX != 0.0 || originY != 0.0 {
+		for i := range ps {
+			translatePathData(ps[i], -originX, -originY)
+		}
+		for i := range qs {
+			translatePathData(qs[i], -originX, -originY)
 		}
 	}
 
@@ -2393,6 +2440,12 @@ func bentleyOttmann(ps, qs Paths, op pathOp, fillRule FillRule) Paths {
 			}
 		}
 		boSquarePool.Put(square)
+	}
+	// translate results back to original coordinate space
+	if originX != 0.0 || originY != 0.0 {
+		for _, r := range Rs {
+			translatePathData(r, originX, originY)
+		}
 	}
 	return Rs
 }

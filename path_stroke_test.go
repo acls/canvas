@@ -80,6 +80,23 @@ func TestPathStroke(t *testing.T) {
 	Epsilon = origEpsilon
 }
 
+func TestPathStrokeLargeCoordinates(t *testing.T) {
+	// Regression test: stroking paths with large coordinates caused a panic in
+	// bentleyOttmann due to floating-point precision loss during intersection
+	// calculations. See https://github.com/tdewolff/canvas/issues/XXX
+	p := &Path{}
+	p.MoveTo(582404.39, 43467.49)
+	p.LineTo(582280.28, 43257.80)
+	p.LineTo(582280.28, 43257.80)
+	p.LineTo(582263.90, 43245.88)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Stroke with large coordinates panicked: %v", r)
+		}
+	}()
+	p.Stroke(1.0, ButtCap, MiterJoin, 0.1)
+}
+
 func TestPathStrokeEllipse(t *testing.T) {
 	rx, ry := 20.0, 10.0
 	nphi := 12
