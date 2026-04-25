@@ -2370,14 +2370,7 @@ func bentleyOttmann(ps, qs Paths, op pathOp, fillRule FillRule) Paths {
 					}
 				}
 				if next == nil {
-					if first.open {
-						R.LineTo(cur.other.X, cur.other.Y)
-					} else {
-						fmt.Println(ps)
-						fmt.Println(op)
-						fmt.Println(qs)
-						panic("next node for result polygon is nil, probably buggy intersection code")
-					}
+					R.LineTo(cur.other.X, cur.other.Y)
 					break
 				} else if next == first {
 					first.open = false // open path encloses area
