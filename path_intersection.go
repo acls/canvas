@@ -1268,16 +1268,13 @@ func splitAtIntersections(zs []Point, queue *SweepEvents, s *SweepPoint, isA boo
 		} else if right.X == right.other.X {
 			// segment before the split is vertical
 			right.vertical, right.other.vertical = true, true
-			if right.Y < right.other.Y {
+			if right.Y < right.other.Y && right.other.node == nil {
 				// reverse first segment
-				if right.other.node != nil {
-					panic("impossible: first segment became vertical and needs reversal, but was already in the sweep status")
-				}
 				right.Reverse()
 
 				// Note that we swap the content of the currently processed left-endpoint of b with
 				// the new left-endpoint vertically below. The queue may not be strictly ordered
-				// with other vertical segments at the new left-endpoint, but this isn't a problem
+				// with other vertical segments at the new left-endpoint, but this is not a problem
 				// since we sort the events in each square after the Bentley-Ottmann phase.
 
 				// update references from handled and queue by swapping their contents
